@@ -126,6 +126,7 @@ the sentence. The predicted sequence represents the sequence of semantic tags.
 
 % TODO include diagram of tagged sentence
 \begin{enumerate}
+\itemsep0em
   \item \tagfor{for} \tagvn{i} \tagva{equals to} \tagvv{0} \tagvn{i} \tagcond{less than}
     \tagvv{10} \tagvn{i} \tagvm{plus plus}
   \item \tagfor{for} loop that runs \tagfi{10} times
@@ -192,6 +193,7 @@ of the spoken programme just by reading from the transcribed sentence. For examp
 we differentiated between the word \texttt{number} in these 3 different context.
 
 \begin{enumerate}
+\itemsep0em
   \item \tago{go} \tago{to} \tago{line} \tago{number} \tago{7}
   \item \tagw{if}{if}{Blue} \tago{the} \tagvn{number} \tagfn{mod}
     \tagvv{2} \tago{is} \tago{even}
@@ -279,22 +281,22 @@ neural networks that is arranged as follows:
 
 % TODO : LSTM Figure
 
-$\sigma$ is the sigmoid function $f(x) = \frac{1}{(1 + e^x)}$, $*$ is the
-matrix element-wise multiplication and $\cdot$ is the matrix dot operator.
+$\sigma$ is the sigmoid function $f(x) = \frac{1}{(1 + e^x)}$, $\odot$ is the
+matrix element-wise multiplication.
 
 \begin{align*}
   s_t &= \lbrack h_{t-1}, x_{t} \rbrack \\
-  f_t &= \sigma \left( W_f \cdot s_t + b_f \right) \\
-  i_t &= \sigma \left( W_i \cdot s_t + b_i \right) \\
-  c_t' &= tanh \left( W_c \cdot s_t + b_c \right) \\
-  o_t &= \sigma \left( W_o \cdot s_t + b_o \right) \\ \\
-  c_t &= c_{t-1} * f_t + i_t * c_t' \\
-  h_t &= o_t * tanh \left( c_t \right) \\
-  y_t &= softmax \left( h_t \cdot W_s + b_s \right)
+  f_t &= \sigma \left( W_f s_t + b_f \right) \\
+  i_t &= \sigma \left( W_i s_t + b_i \right) \\
+  c_t' &= tanh \left( W_c s_t + b_c \right) \\
+  o_t &= \sigma \left( W_o s_t + b_o \right) \\
+  c_t &= c_{t-1} \odot f_t + i_t \odot c_t' \\
+  h_t &= o_t \odot tanh \left( c_t \right) \\
+  y_t &= softmax \left( h_t W_s + b_s \right)
 \end{align*}
 
 At each word, the internal hidden states $c_t$ is updated as it advances from
-one word to the next by removing
+one word to the next by removing irrelevant information
 
 
 We added another layer of linear operation on the output state $h_t$ to get
@@ -320,8 +322,16 @@ that LSTMs become more capable at dealing with long range dependencies.
 % TODO : Show better results of long range deps
 
 \chapter{Related Work}
+\section{SENNA}
+The de facto Semantic Role labelling framework that provided a similar
+neural network approach to the \cite{DBLP2011Collobert}
+
+\section{Bi-directional LSTM-CNNs-CRF}
+
+
 \section{Statistical Machine Translation}
 There is an equally appealing framework for
+
 
 \label{ch:related}
 
@@ -336,19 +346,42 @@ We measure the how well the model does by the negative log likelihood
 of the labelled tagged sequence when given the conditional probability of all
 tags for each word. This is the same loss function that will be optimized during
 the learning of the model parameters $\theta$. The parameters refer to the
-weight and bias matrices that are used the LSTM.
+weight and bias matrices that are used the LSTM. Given a word $w \in W$ from
+the list of words in our vocabulary, we obtain a probability of $P(T=t | w,
+\theta)$ for every given tag that exists in our system.
 
 \begin{equation}
-  Loss(\theta) = -\sum_{w \in W} \sum_{t \in T} log(P(t | w; \theta)) I(t = \hat{t})
+  Loss(\theta) = -\sum_{w \in W} \sum_{t \in T} log(P(t | w, \theta)) I(t = \hat{t})
 \end{equation}
 where $\hat{t}$ is the correct tag for $w$ and $I$ is the 0-1 loss function
+
+\subsection{Word Level Likelihood}
+
+The loss function defined here is extremely similar to the one presented by
+Collobert \cite{DBLP2011Collobert} under the section of Word-Level log
+likelihood. This formulation just results in the correct path being having
+increased likelihood but does not take into account of sentence level tag
+dependencies that is captured in a more sophisticated sentence likelihood
+function.
+
+In brief, the sentence likelihood function considers a probability function
+which places an explicit cost for certain tag-to-tag transitions. The extension
+which was proposed in the paper involved learning the transition probability
+and then producing a Sentence level log likelihood loss function. The best
+sentence is optimal decoding over all possible paths that the tag sequence that
+take using the Viterbi algorithm.
+
+A more modern approach that is taken by the Xuezhe \cite{2016arXiv160301354M}
+is to add a Conditional Random Field layer on top of the output of their Bi-directional
+LSTM layer.
+
+
+\subsection{Stochastic Gradient Descent}
 
 The optimization of the function is done by employing gradient descent over the
 parameters in the LSTM (including the word embedding vector).
 
-For a comparison of our implementation to an unoptimized standard Machine Translation,
-we will also introduce the BLEU score as one of the measures that we will test our
-test set against.
+
 
 
 \section{Design of Algorithm}
