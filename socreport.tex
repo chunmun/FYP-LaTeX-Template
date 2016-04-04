@@ -13,6 +13,12 @@ sorting=ynt
 ]{biblatex}
 \addbibresource{socreport.bib}
 
+\usepackage{titlesec}
+%\titleformat{\subsection}[runin]
+%  {\normalfont\large\bfseries}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}[runin]
+  {\normalfont\normalsize\bfseries}{\thesubsubsection}{1em}{}
+
 \begin{document}
 \pagenumbering{roman}
 
@@ -124,7 +130,6 @@ transcribed text is labelled with semantic tags such as \texttt{variable-name},
 or \texttt{if}. The model which is adopted is a sequence prediction given
 the sentence. The predicted sequence represents the sequence of semantic tags.
 
-% TODO include diagram of tagged sentence
 \begin{enumerate}
 \itemsep0em
   \item \tagfor{for} \tagvn{i} \tagva{equals to} \tagvv{0} \tagvn{i} \tagcond{less than}
@@ -216,15 +221,16 @@ system must be robust to arbitrary combinations of the statements. However, the
 size of the labelled corpus severely restricts the number of examples that the
 model has seen and causes over-fitting to happen when the examples are sparse.
 
-For example, given the complexity of the model parameters and small number of
-variable names seen, the model might over-fit by remembering that some words
-are very likely to be variable names compared to others. Words that are not
-seen before have a high chance of being tagged with the dummy tag even though
-they may occur with high probability with same tags like
-\texttt{variable-names}. Hence the problem faced by a small corpus consists of
-2 parts, one, the lack of sufficient examples in the structure of spoken code,
-and two, the limited vocabulary of the corpus.  We shall discuss this problem
-in further depth during the presentation of the results.
+\subsubsection{Vocabulary Sparsity} For example, given the complexity of the
+model parameters and small number of variable names seen, the model might
+over-fit by remembering that some words are very likely to be variable names
+compared to others. Words that are not seen before have a high chance of being
+tagged with the dummy tag even though they may occur with high probability with
+same tags like \texttt{variable-names}. Hence the problem faced by a small
+corpus consists of 2 parts, one, the lack of sufficient examples in the
+structure of spoken code, and two, the limited vocabulary of the corpus.  We
+shall discuss this problem in further depth during the presentation of the
+results.
 
 % TODO : Talk about how the generated corpus is useless
 \subsubsection{Generated Corpus}
@@ -314,13 +320,6 @@ networks is that the input sequence can be made arbitrarily long, while still
 retaining the capability of learning long range dependencies.
 
 
-\subsubsection{Large Forget Gate Bias}
-We initialized the forget gate bias $b_f$ of +2 instead of a zero vector after
-considering the results from Jozefowicz, et al\cite{ICML2015JozefowiczZS}, show
-that LSTMs become more capable at dealing with long range dependencies.
-
-% TODO : Show better results of long range deps
-
 \chapter{Related Work}
 \section{SENNA}
 The de facto Semantic Role labelling framework that provided a similar
@@ -342,16 +341,15 @@ After defining the problem in terms of a sequence prediction, we now state the
 loss function that is used as a measure of how likely the correct sequence of
 tags are predicted given the input.
 
-We measure the how well the model does by the negative log likelihood
+\subsubsection{Loss Function} We measure the how well the model does by the negative log likelihood
 of the labelled tagged sequence when given the conditional probability of all
 tags for each word. This is the same loss function that will be optimized during
 the learning of the model parameters $\theta$. The parameters refer to the
 weight and bias matrices that are used the LSTM. Given a word $w \in W$ from
 the list of words in our vocabulary, we obtain a probability of $P(T=t | w,
 \theta)$ for every given tag that exists in our system.
-
 \begin{equation}
-  Loss(\theta) = -\sum_{w \in W} \sum_{t \in T} log(P(t | w, \theta)) I(t = \hat{t})
+  \ell(\theta) = -\sum_{w \in W} \sum_{t \in T} log(P(t | w, \theta)) I(t = \hat{t})
 \end{equation}
 where $\hat{t}$ is the correct tag for $w$ and $I$ is the 0-1 loss function
 
@@ -372,32 +370,74 @@ sentence is optimal decoding over all possible paths that the tag sequence that
 take using the Viterbi algorithm.
 
 A more modern approach that is taken by the Xuezhe \cite{2016arXiv160301354M}
-is to add a Conditional Random Field layer on top of the output of their Bi-directional
-LSTM layer.
-
-
-\subsection{Stochastic Gradient Descent}
-
-The optimization of the function is done by employing gradient descent over the
-parameters in the LSTM (including the word embedding vector).
-
-
+is to add a Conditional Random Field layer on top of the output of their
+Bi-directional LSTM layer. This allows the final output to take into
+consideration tag transitions given the hidden states that is
+generated from the 2 LSTMs in both directions.
 
 
 \section{Design of Algorithm}
+
+\subsection{Training}
+
+\subsubsection{Stocastic Gradient Descent} The optimization of the function is
+done by employing gradient descent over the parameters in the LSTM (including
+the word embedding vector).
+
+Taking the gradients of the contribution of each weight and bias matrix is
+easily done in Theano by using the Tensor gradient function. We make of this
+functionality as well when defining the version of the loss function with the
+L2 regularization term. The only hyperparameter that needed to be determined
+here is the learning rate $lr$.
+\begin{equation}
+  \theta \leftarrow \theta - lr * \frac{Loss}{\delta \theta}
+\end{equation}
+
+\subsubsection{AdaDelta} We find that implementing AdaDelta where we take sums
+of the historical gradients helped out result to converge much faster than just
+using SGD without momentum. The resulting modified gradient descent is the one
+that we will be using in the experiments. However, this method introduced another
+hyperparameter $\rho$ that needs to be tuned for the convergence to work well.
+
+\begin{align*}
+  h &\leftarrow h + \left( \frac{\partial \ell(\theta)}{\partial \theta} \right)^2 \\
+  \theta &\leftarrow \theta - lr * \frac{\partial \ell(\theta)}{\partial \theta}
+  * \frac{\rho}{\rho + h}
+\end{align*}
+
+There is several literature and advances on different gradient descent
+technique such as AdaGrad, RMSProp and Nesterov method.  However, there are
+different appropriate initialization parameters for the weight matrices for
+each technique.  Exploration of the different gradient descent techniques
+are out of scope for this project but we feel the significantly faster rate of
+convergence due to AdaDelta deserved a special mention.
+
+\subsubsection{Gradient Clipping} In order to prevent fluctuations of the parameters
+values, we employ a method called clipping on the gradient matrices $h$ and
+$\frac{\partial \ell(\theta)}{\partial \theta}$. In this case, the values are
+clipped to the range of -5 to 5.
+
+\subsubsection{L2 Regularization} We experimented with adding a L2
+regularization term to the loss function but
+% TODO put out results for using L2 reg
+
+% TODO initialization divide by largest eigenvalue
+
+\subsection{Parameter Initialization}
+
+\subsubsection{Large Forget Gate Bias} We initialized the forget gate bias
+$b_f$ of +2 instead of the zero vector after considering the results from
+Jozefowicz, et al\cite{ICML2015JozefowiczZS}. They have showed empirically that
+LSTMs become more capable at dealing with long range dependencies and outperform
+for sophisticated variants like the Gated Recursive Unit (GRU) on several
+tasks.
+
+% TODO : Show better results of long range deps
 
 
 
 \chapter{Evaluation}
 % TODO
-
-\section{Implementation Details}
-% TODO
-
-We experimented with adding a L2 regularization term to the loss function but
-% TODO put out results for using L2 reg
-% TODO initialization divide by largest eigenvalue
-% TODO large forget gate bias
 
 
 \section{Experimental Setup}
