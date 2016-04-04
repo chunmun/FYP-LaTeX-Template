@@ -1,31 +1,62 @@
 \documentclass[fyp]{socreport}
 \usepackage{fullpage}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{MnSymbol}
+
+\usepackage[usenames,dvipsnames,svgnames,table]{xcolor}
+\usepackage[english]{babel}
+\usepackage[
+backend=biber,
+style=alphabetic,
+sorting=ynt
+]{biblatex}
+\addbibresource{socreport.bib}
+
 \begin{document}
 \pagenumbering{roman}
-\title{Design and Implementation of an Algorithm for a Problem}
-\author{Tan Ah Kow}
-\projyear{2004/05}
-\projnumber{H123456}
-\advisor{Dr. Lee Ah Hua}
+
+\title{Hands-Free Programming - Talk to Code}
+\author{Soon Chun Mun}
+\projyear{2015/16}
+\projnumber{H0201120}
+\advisor{Prof. Ooi Wei Tsang}
+
 \deliverables{
-	\item Report: 1 Volume
-	\item Source Code: 1 DVD}
+  \item Report: 1 Volume}
 \maketitle
+
+\newcommand{\vp}{$\vphantom{equals to}$}
+\newcommand{\tagw}[3]{$\underbrace{\hbox{\vp #1}}_{\hbox{\color{#3} \vp \textbf{#2}}}$}
+\newcommand{\tago}[1]{\tagw{#1}{O}{Grey}}
+\newcommand{\tagfor}[1]{\tagw{#1}{for}{red}}
+\newcommand{\tagfi}[1]{\tagw{#1}{iters}{red}}
+
+\newcommand{\tagfn}[1]{\tagw{#1}{fn-name}{Blue}}
+
+\newcommand{\tagcond}[1]{\tagw{#1}{cond}{blue}}
+\newcommand{\tagif}[1]{\tagw{#1}{if}{blue}}
+\newcommand{\tagvn}[1]{$\underbrace{\hbox{\vp #1}}_{\hbox{\vp \textbf{{\color{ForestGreen} var}-name}}}$}
+\newcommand{\tagvv}[1]{$\underbrace{\hbox{\vp #1}}_{\hbox{\vp \textbf{{\color{ForestGreen} var}-val}}}$}
+\newcommand{\tagvm}[1]{$\underbrace{\hbox{\vp #1}}_{\hbox{\vp \textbf{{\color{ForestGreen} var}-mod}}}$}
+\newcommand{\tagva}[1]{$\underbrace{\hbox{\vp #1}}_{\hbox{\vp \textbf{{\color{ForestGreen} var}-ass}}}$}
+
 \begin{abstract}
-In this report, we study a problem and design an efficient algorithm
-to solve the problem.  We implemented the algorithm and evaluated
-its performance againts previous proposed algorithms that solves the
-same problem.  Our results show that our algorithm runs faster.
+
+In this report, we explore a method to identify semantic roles within
+transcribed text as part of a pipeline to turn spoken speech into
+code. The problem involves extracting the words that form the components
+of code and command by correctly labelling them in their various semantic
+context.
 
 \begin{descriptors}
     \item C5 Computer System Implementation
-	\item G2.2 Graph Algorithms
 \end{descriptors}
 \begin{keywords}
-	Problem, algorithm, implementation
+	Semantic Role Labelling, Natural Language Processing, Neural Network
 \end{keywords}
 \begin{implement}
-	Solaris 10, g++ 3.3, Tcl/Tk 8.4.7
+	Python 3.5.1 Theano 0.7
 \end{implement}
 \end{abstract}
 
@@ -34,63 +65,364 @@ same problem.  Our results show that our algorithm runs faster.
    Without them, I would not have be able to complete this project.
 \end{acknowledgement}
 
-\listoffigures 
+
+
+\listoffigures
 \listoftables
-\tableofcontents 
+\tableofcontents
 
 \chapter{Introduction}
-Many problems exist in computer science.  In this project, we 
-studied one particular important problem and propose a solution 
-for it.  
 
 \section{Background}
-In this section, we briefly discuss the history and background
-of the problem.  A detail literature survey is presented in 
-Chapter \ref{ch:related}.
+This project embarks on constructing a possible framework which human
+programmers are able to use speech to directly write code instead of typing
+them. Conversion of human speech to code requires an understanding of code
+structure occur in spoken code.
 
-The problem we study in this report is an important one.
-This problem is first proposed in 1990 in the context
-of graph theory \cite{smith90graph}.  Zhang gives the
-first algorithm to the problem and applied it to solve several 
-problems in artificial intelligence \cite{zhang91ai,zhang92ai}.  
-More recently, a slightly different formulation of the problem
-is studied independently \cite{kovsky92diff,ali94diff}.  None of this previous work
-uses the technique that we propose in this project.  Thus, we 
-believe that our algorithm is novel.
+The code structures that we explored involved variable declaration, loops,
+if-else conditions and function declarations.
+
+Although spoken code contains nuances of natural humans language, we discovered
+that the structures are syntactically very close to actual written code. In
+fact even when humans express code that is not syntactically correct, it seems
+that the number of ways they are spoken is very consistent and similar.  For
+example, in the construction of a \texttt{for} loop. Many may choose to
+express in the following ways:
+
+\begin{verbatim}
+  1. for i equals to 0 i less than 10 i plus plus
+  2. for loop that runs 10 times
+  3. create a for loop inside that runs 10 times
+\end{verbatim}
+
+We see that although the first sentence is an accurate reflection of how code
+may be written as it is spoken, the second version is equally likely to occur.
+The second version is a lot more natural even though it fails to specify the
+loop variable or invariants because that has been abstracted away when the main
+purpose of the code is to run a loop a number of times.
+
+The last example is a sentence which we extracted from the transcribed corpus
+that we used with our experiments. We see that the sentence contains
+additional semantic context such as an explicit creation of the loop and that
+the code within the loop should run 10 times.
+
+All 3 examples clearly expresses the idea of creating a for loop that runs a
+set number of times and our project intends to finally output C code that is
+very similar to the first sentence. However, there are enough differences
+between them that this cannot be directly approached without considering
+the robustness of the method of translation in the presence of missing
+information or word paraphrasing in non-programming keywords.
+
+This motivates us to model the problem in terms of \textbf{Semantic Role
+Labelling} where semantically relevant keywords of the given sentence are
+identified before further processing can infer missing information.
 
 \section{The Problem}
-In this section, we formally defined the problem.  We adopt
-the definition given by Kovsky \cite{kovsky92diff}.
+
+The problem we tackle here involves the part of the pipeline where accurately
+transcribed text is labelled with semantic tags such as \texttt{variable-name},
+or \texttt{if}. The model which is adopted is a sequence prediction given
+the sentence. The predicted sequence represents the sequence of semantic tags.
+
+% TODO include diagram of tagged sentence
+\begin{enumerate}
+  \item \tagfor{for} \tagvn{i} \tagva{equals to} \tagvv{0} \tagvn{i} \tagcond{less than}
+    \tagvv{10} \tagvn{i} \tagvm{plus plus}
+  \item \tagfor{for} loop that runs \tagfi{10} times
+  \item create a \tagfor{for} loop inside that runs \tagfi{10} times
+\end{enumerate}
+
+To change the tagged sequence so that it is the same length as the input
+sentence, we have to split tags that have contiguous words into separate tags
+as well as have placeholder for non-tagged word. We are able to have tagged
+sequence that is of the same length, like the below for the last line.
+
+\hspace{20pt}
+\tagfor{for} \tago{loop} \tago{that} \tago{runs} \tagfi{10} \tago{times}
+
+The approach we are taking fits into a sequence-to-sequence modelling task
+naturally. We will use a neural network approach to solve this task.
+Specifically, we use a Recursive neural network that reads the sentences in one
+word at a time and generates the tags after every word. Now the sentence
+length and the tag sequence length are the same by artificially adding in the
+dummy tag.
+
 
 \section{Our Solution}
-\section{Report Organization}
+Recurrent neural networks has produced many impressive results on speech and
+natural language processing as well computer vision task. These tasks are
+characterized by an extremely large dimension space of the model. In our
+specific task of sequence-to-sequence prediction, if we have $w$ words, and
+$t$ different tag, then a sentence of length $n$ will have an input space
+of $w^n$ and an output space of $t^n$. A large percentage of the input sentences
+will be invalid because they do not make any sense in English as well as
+invalid tag sequences in the output. However, this does not make this
+task any less daunting given that there can be a complex combinations of words
+that code can be expressed in speech.
+
+Our approach is basically a supervised learning machine learning task. After
+creating a corpus of correctly labelled sentences, we train the recurrent
+neural network by feeding in each word in a sentence sequentially into the LSTM
+and reading a tag at each time step. The process can be roughly abstracted as
+shown in the figure:
+
+% TODO : Figure
+
+\subsection{Corpus}
+% TODO : How many sentences
+We have gathered a small corpus of labelled sentences that is used for
+supervised training. Students, who are programmers, are given 4 different tasks
+in which they must express their code by speaking directly to an experimenter.
+The experimenter will listen to what the student said, and proceed to type on
+the computer what is interpreted from his speech. The speech is generally a mixture
+of movement commands as well as code definitions, such as variable declaration.
+Throughout the entire experiment, the student is not able to directly type or
+gesture to the experimenter his intent other than through his or her own voice.
+% TODO : Reference Yixiu's part?
+
+After each person has completed their task, their speech is then transcribed
+and tagged manually. The sentences boundaries are inserted whenever the student's
+speech reached an extended pause. This creates the realistic situation of
+a real-time parsing of the spoken code. However, it also created many situations
+where the spoken utterance did not contain any semantic elements like filler
+words.
+
+Since the programming task is known beforehand, we can easily infer the intent
+of the spoken programme just by reading from the transcribed sentence. For example,
+we differentiated between the word \texttt{number} in these 3 different context.
+
+\begin{enumerate}
+  \item \tago{go} \tago{to} \tago{line} \tago{number} \tago{7}
+  \item \tagw{if}{if}{Blue} \tago{the} \tagvn{number} \tagfn{mod}
+    \tagvv{2} \tago{is} \tago{even}
+  \item \tagfn{printf} \tago{the} \tago{number} \tago{is} \tago{even}
+\end{enumerate}
+
+In the first sentence and in the last sentence, \texttt{number} is tagged
+with the dummy tag. However, in the second case, the correct tag is
+\texttt{variable-name}.
+
+Even humans will have a difficult time tagging this, once the sentence are
+taken out of context. We can easily compound the problem if all the 3 sentences
+are combined into a single sentence. A student might indicate his wish to move
+to the 7th line, followed by a \texttt{if} conditional and a \texttt{printf}.
+
+It will be difficult for most sequence-to-sequence predictors to figure out
+what the correct tags are without considering the surrounding word context and
+sentence structure. Especially so when the same word is tagged differently. The
+system must be robust to arbitrary combinations of the statements. However, the
+size of the labelled corpus severely restricts the number of examples that the
+model has seen and causes over-fitting to happen when the examples are sparse.
+
+For example, given the complexity of the model parameters and small number of
+variable names seen, the model might over-fit by remembering that some words
+are very likely to be variable names compared to others. Words that are not
+seen before have a high chance of being tagged with the dummy tag even though
+they may occur with high probability with same tags like
+\texttt{variable-names}. Hence the problem faced by a small corpus consists of
+2 parts, one, the lack of sufficient examples in the structure of spoken code,
+and two, the limited vocabulary of the corpus.  We shall discuss this problem
+in further depth during the presentation of the results.
+
+% TODO : Talk about how the generated corpus is useless
+\subsubsection{Generated Corpus}
+In the initial parts of the project, we set up to mitigate some of the issues
+of corpus sparsity by generating an artificial corpus that contains an arbitrary
+combination of certain code structures that we predict will appear in spoken code.
+
+For example, we can easily create a corpus with a sentence prototype like so:
+
+\hspace{20pt}
+\tagif{if} \tagvn{i/j/k/...} \tagcond{less than/greater than} \tagvn{i/j/k/...}
+
+This method helped to alleviate some of the sparsity problem that occurred in
+the tagged transcribed speech. The corpus is now expanded with more possible
+patterns of spoken code. However, this does not alleviate the problem of limited
+vocabulary very much at all. Moreover, we see that the sentences in human spoken
+code is punctuated with many dummy tags, but the generated corpus lacks such
+features.
+
+% TODO : Talk how about a modified version of dropout is used vs normal dropout
+% TODO : Dropout by replacing with rare tag randomly
+% TODO : Check ability to generalize
+\subsubsection{Dropout}
+
+\subsection{Word Embeddings}
+First the words of the sentence are converted to word vectors via a word
+embedding. The word embedding used in all our experiments is a float vector of
+length 50. In our solution, the embedding vectors are randomly generated
+initially before being updated using the back-propagated gradients during the
+update step. A special \texttt{<unk>} symbol is given to words that we did not
+encounter within the training corpus. We adopted word embeddings in our
+training in the hope that similar words that have the same tags will be "close
+together" in the word embedding space.
+
+Here we also experimented with using pre-trained word embeddings from Wikipedia
+that is trained using Glove \cite{pennington2014glove}.
+% TODO : Differences in word embeddings
+% TODO : Lemmatization
+
+After converting the words in the sentence into word vectors, we then feed the
+word vectors one at each time step into the LSTM.
+
+% TODO : Fix ugly text
+\begin{align*}
+  &\text{for} &\text{loop } &\text{that } &\text{runs } &\text{10 } &\text{times } \\
+  &\downarrow &\downarrow &\downarrow &\downarrow &\downarrow &\downarrow \\
+  &[1.27, -0.2, 3, ...] &[0.4,...] &[-0.01, ...] &[-2, ...] &[4.2, ...] &[0.75, ...]
+\end{align*}
+
+
+\subsection{LSTM}
+Long-short term memory (LSTM) refers to a specific architecture of Recursive
+neural networks that is arranged as follows:
+
+% TODO : LSTM Figure
+
+$\sigma$ is the sigmoid function $f(x) = \frac{1}{(1 + e^x)}$, $*$ is the
+matrix element-wise multiplication and $\cdot$ is the matrix dot operator.
+
+\begin{align*}
+  s_t &= \lbrack h_{t-1}, x_{t} \rbrack \\
+  f_t &= \sigma \left( W_f \cdot s_t + b_f \right) \\
+  i_t &= \sigma \left( W_i \cdot s_t + b_i \right) \\
+  c_t' &= tanh \left( W_c \cdot s_t + b_c \right) \\
+  o_t &= \sigma \left( W_o \cdot s_t + b_o \right) \\ \\
+  c_t &= c_{t-1} * f_t + i_t * c_t' \\
+  h_t &= o_t * tanh \left( c_t \right) \\
+  y_t &= softmax \left( h_t \cdot W_s + b_s \right)
+\end{align*}
+
+At each word, the internal hidden states $c_t$ is updated as it advances from
+one word to the next by removing
+
+
+We added another layer of linear operation on the output state $h_t$ to get
+$y_t$ before we are able to evaluate the softmax. This effectively frees the
+LSTM to have the size of the hidden vector $c_t$ to be the same as the output
+$y_t$. Adding another sigmoid operator on $y_t$ seems to have yielded extremely
+bad training results that does not converge. This could be a case of bad
+initialization of the output layer, but we did not have sufficient time to
+fully test our hypothesis.
+% TODO : Check output layer
+
+The appeal of using a Recursive neural network like the LSTM over more
+conventional methods like convolutional networks or fully connected neural
+networks is that the input sequence can be made arbitrarily long, while still
+retaining the capability of learning long range dependencies.
+
+
+\subsubsection{Large Forget Gate Bias}
+We initialized the forget gate bias $b_f$ of +2 instead of a zero vector after
+considering the results from Jozefowicz, et al\cite{ICML2015JozefowiczZS}, show
+that LSTMs become more capable at dealing with long range dependencies.
+
+% TODO : Show better results of long range deps
 
 \chapter{Related Work}
+\section{Statistical Machine Translation}
+There is an equally appealing framework for
+
 \label{ch:related}
+
 
 \chapter{Problem and Algorithm}
 \section{Formal Description of Problem}
+After defining the problem in terms of a sequence prediction, we now state the
+loss function that is used as a measure of how likely the correct sequence of
+tags are predicted given the input.
+
+We measure the how well the model does by the negative log likelihood
+of the labelled tagged sequence when given the conditional probability of all
+tags for each word. This is the same loss function that will be optimized during
+the learning of the model parameters $\theta$. The parameters refer to the
+weight and bias matrices that are used the LSTM.
+
+\begin{equation}
+  Loss(\theta) = -\sum_{w \in W} \sum_{t \in T} log(P(t | w; \theta)) I(t = \hat{t})
+\end{equation}
+where $\hat{t}$ is the correct tag for $w$ and $I$ is the 0-1 loss function
+
+The optimization of the function is done by employing gradient descent over the
+parameters in the LSTM (including the word embedding vector).
+
+For a comparison of our implementation to an unoptimized standard Machine Translation,
+we will also introduce the BLEU score as one of the measures that we will test our
+test set against.
+
+
 \section{Design of Algorithm}
-\section{Proof of Correctness}
-\section{Complexity Analysis}
+
+
 
 \chapter{Evaluation}
+% TODO
+
 \section{Implementation Details}
+% TODO
+
+We experimented with adding a L2 regularization term to the loss function but
+% TODO put out results for using L2 reg
+% TODO initialization divide by largest eigenvalue
+% TODO large forget gate bias
+
+
 \section{Experimental Setup}
+% TODO
+
 \section{Results}
+% TODO Check L2 regularization differences
+% TODO Difference with using word vectors
+
+The model is extremely sensitive the words that are found within the corpus but generally
+robust to noise that can result from mislabelling.
+
+
 
 \chapter{Conclusion}
+% TODO
+
 \section{Contributions}
+% TODO
+
 \section{Future Work}
 
-\bibliographystyle{socreport}
-\bibliography{socreport}
+
+\subsection{Universal Code Speech}
+Current work is done by transcribing spoken code from programmers that have a
+good knowledge of the syntactical structures that are present in C. That causes
+the transcribed speech have extremely clear structures that are reflective of
+the syntax present in C code.
+
+However, this creates problems in parsing when say we switch to a new
+programming language like Python - The loop structure is distinctly different
+in the sense that there are new keywords like range and enumerate. There is
+also a more distinct lambda keyword in Python for defining anonymous functions.
+
+The tagger will not be able to construct correct tags based on new words that
+are not found within the training corpus. Having a good word embedding that
+closely models keywords that perform the same functions may alleviate the problem
+but it will be more informative to have an abstract representation of certain
+coding concepts rather than rely on keywords and syntax to provide cues.
+
+
+\subsection{Inter-Sentence Dependencies}
+Certain contextual information can be brought across multiple sentences. This
+situation happens most obviously when the variable or function names are used.
+The context that a certain word is a particular variable type like an array is
+lost, when the students use the same variable name over multiple sentences.
+
+For example, in one the given task of the corpus gathering experiments, the
+students have to create a string array and proceed to fill it with multiple
+string values. It would be useful if the model allowed contextual information
+that the array and its index is being used, rather than tag them independently
+as \texttt{variable-name} and \texttt{variable-value}, we can tag the value as
+the \texttt{variable-array-index}.
+
+
+\printbibliography[title={Whole bibliography}]
 
 \appendix
 \chapter{Code}
 
-\chapter{Proofs}
-In this appendix, we present alternate, longer, but more interesting proof 
-of correctness of our algorithm.  This proof is based on induction and proof
-by contradiction.
 \end{document}
