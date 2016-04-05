@@ -5,6 +5,7 @@
 \usepackage{MnSymbol}
 \usepackage{graphicx}
 \usepackage{wrapfig}
+\usepackage{multirow}
 
 \usepackage[usenames,dvipsnames,svgnames,table]{xcolor}
 \usepackage[english]{babel}
@@ -300,9 +301,9 @@ code is punctuated with many dummy tags, but the generated corpus lacks such
 features.
 
 With just 15 sentence prototypes, the combinatoric explosion in the possible
-combinations exceed over 30k sentences - Overwhelming the manually annotated
-sentence count 65 to 1. The generated sentences are attached to the training
-set together with the manually annotated sentences.
+combinations exceed over 50k sentences - Overwhelming the manually labelled
+sentence count. The generated sentences are attached to the training
+set together with the manually labelled sentences.
 
 \subsection{Word Embeddings}
 First the words of the sentence are converted to word vectors via a word
@@ -327,7 +328,7 @@ word vectors one at each time step into the LSTM.
 \end{figure}
 
 % TODO : Lemmatization
-There are approximately 500 words present in the words that were annotated within
+There are approximately 500 words present in the words that were labelled within
 our experiments. The dimensionality is small enough that lemmatization did
 not significantly alter the performance of our solution. On the other hand, the
 pre-trained Glove embeddings, comes with a much larger vocabulary size of
@@ -489,10 +490,6 @@ but the models here have many more parameters and are generally difficult to
 train without sufficient data.
 
 
-\section{Statistical Machine Translation}
-There is an equally appealing framework for
-
-
 \label{ch:related}
 
 
@@ -582,8 +579,10 @@ $\frac{\partial \ell(\theta)}{\partial \theta}$. In this case, the values are
 clipped to the range of -5 to 5.
 
 \subsubsection{L2 Regularization} We experimented with adding a L2
-regularization term to the loss function but
-
+regularization term to the loss function to see if the model performs worse
+when the values of the matrices are constrained to be smaller. The technique
+is generally used to prevent over-fitting on traditional machine learning
+models
 
 \subsection{Parameter Initialization}
 
@@ -595,16 +594,17 @@ for sophisticated variants like the Gated Recursive Unit (GRU) on several
 tasks.
 
 \subsubsection{Weight initializations} The matrix values are initialized to
-random uniform values of \\$(\sqrt{\frac{-6}{fan_{in} + fan_{out}}},
+random uniform values of \\$(-\sqrt{\frac{6}{fan_{in} + fan_{out}}},
 \sqrt{\frac{6}{fan_{in} + fan_{out}}})$, where $fan_{in}$ and $fan_{out}$ refers
 to the size of the matrix along the rows and columns.
 
 
 \chapter{Evaluation}
-The main evaluation criteria that we will use here is the Word Error Rate (WER)
-of labelled sequence against the correct labels. The values reported here
+The main evaluation criteria that we will use here is the mean Word Error Rate
+(WER) of labelled sequence against the correct labels. The values reported here
 will be the mean WER across all sentences. This value includes the mislabelling
-of dummy tags as well as the semantic ones within the output sequence.
+of dummy tags as well as the semantic ones within the output sequence. Hence a
+mean WER of 1 indicates that 1 label will be wrong per sentence on average.
 
 % TODO : State how many sentences are used to test
 To test the practical uses of a corpus that is trained entirely with the speakers
@@ -616,54 +616,116 @@ generalization ability beyond the syntax of the same language.
 
 
 \section{Experimental Setup}
+Each of the models are setup to train over 150 epochs of the training set. Each
+epoch goes through every single example in the training set. The hidden state
+dimension of the LSTM is set to 256.
+
 \subsubsection{Datasets}
 We will use 2 different datasets for training and another 2 for validation in
 our experiments. The training datasets comprises of 458-sentences drawn from
 speech experiments where the speakers used C as well as a generated corpus
-containing 30K sentences that were generated from sentence prototypes which is
+containing 50K sentences that were generated from sentence prototypes which is
 also modelled after C code.
 
 The validation datasets comprises of a 149-sentence dataset which the speaker
 used the C programming language, and another 162-sentence dataset where the speaker
 used Java.
 
+We will test the robustness of the model and training when we vary the scheme
+of the word embedding used, whether it is randomly assigned, pre-trained but
+fixed or pre-trained but allowed to be updated.
+
+We will also test the effectiveness of training a combined generated and the
+manually labelled dataset.
+
+The other factor that we will test the usefulness of the L2 regularization term
+in the Loss function.
 
 \section{Results}
+The results give spectacularly low mean WER scores across our different measures
+considering the limited size of our training corpus.
+
+\subsection{Word Embeddings}
+These results were obtained by turning off L2 regularization.
+
 \begin{table}[h!]
 \centering
-  \begin{tabular}{ |p{3cm}||p{3cm}|p{3cm}|p{3cm}|  }
-   \hline
-   \multicolumn{4}{|c|}{Country List} \\
-   \hline
-   Country Name     or Area Name& ISO ALPHA 2 Code &ISO ALPHA 3 Code&ISO numeric Code\\
-   \hline
-   Afghanistan   & AF    &AFG&   004\\
-   Aland Islands&   AX  & ALA   &248\\
-   Albania &AL & ALB&  008\\
-   Algeria    &DZ & DZA&  012\\
-   American Samoa&   AS  & ASM&016\\
-   Andorra& AD  & AND   &020\\
-   Angola& AO  & AGO&024\\
-   \hline
+\begin{tabular}{ |p{3cm}||c|c|c| }
+    \hline
+   Model & Training WER & C Validation WER & Java Validation WER \\
+    \hline
+    LSTM + 458Manual + Random Emb       & $0.011$ & $0.718$ & $1.43$ \\
+    \hline
+    LSTM + 458Manual + Fixed Glove Emb  & $0.024$ & $0.765$ & $1.26$ \\
+    \hline
+    LSTM + 458Manual + Learnt Glove Emb & $0.002$ & $0.738$ & $1.42$ \\
+    \hline
   \end{tabular}
-  \caption{Table to test captions and labels}
+  \caption{Results table for Word Embeddings}
   \label{table:1}
 \end{table}
 
+We see that varying different modes of word embedding did not help our
+models to generalize. This is expected because the Glove word embeddings does
+not represent the domain of our problem very well since they are trained
+on Wikipedia articles. However, the models also did not perform any worse
+when using an out-of-domain word embedding, with the additional caveat that
+the embeddings be allowed to be updated during training. The only exception
+here is the Java Validation WER which seems to have improved when using the
+fixed Glove embeddings.
 
-\subsection{Word Embeddings}
-% TODO Difference with using word vectors
 
 \subsection{Generated Corpus}
-% TODO Talk about how the generated corpus is useless
+All trainings with the Generated Corpus, either as a standalone or in
+combination with the manually labelled has produced worst results across
+the board on all measures. This is likely due to the mismatch between
+what we expect the sentence structures are like (the prototypes) versus
+the actual sentence structures. The actual training data is very likely to
+be punctuated with many rare words and repeated filler words.
+
+However, optimizing over the extremely structured training set now by
+optimizing the Loss function causes the model to try and satisfy as many
+structured sentences as possible. Since the training set is dominated
+in number by unrealistic sentences, the model fits very poorly on both
+the in-domain C Validation WER and slightly out-of-domain Java Validation
+WER.
+
+This also suggests that models that learn structured grammatical rules might be
+doomed to fail at learning the correct sentence models as long as they do not
+reflect how spoken code statements are realistically constructed.
 
 \subsection{L2 Regularization}
-% TODO Check L2 regularization differences
 
-% TODO Show better results of long range deps with large forget gate bias
+These experiments were done with just the Learnt Glove Embeddings
+{
+\begin{table}[h!]
+\centering
+\begin{tabular}{ |p{3cm}||c|c|c| }
+    \hline
+   Model & Training WER & C Validation WER & Java Validation WER \\
+    \hline
+    LSTM + 458Manual + L2=0     & $0.002$ & $0.738$ & $1.42$ \\
+    \hline
+    LSTM + 458Manual + L2=0.0001& $0.004$ & $0.772$ & $1.27$ \\
+    \hline
+    LSTM + 458Manual + L2=0.1   & $0.011$ & $0.658$ & $1.06$ \\
+    \hline
+  \end{tabular}
+  \caption{Results table for L2 Regularization}
+  \label{table:1}
+\end{table}
 
-The model is extremely sensitive the words that are found within the corpus but
-generally robust to noise that can result from mislabelling.
+We see that the L2 Regularization term did not have much of a significant effect
+on the WER of both the training set and the C Validation set. However, it does
+strongly suggest that the regularization helps when dealing with sentences that
+are not found in the training set.
+}
+
+\subsection{Mislabels}
+In this section, we will take a look at some of the mislabels that the model
+has made in order to gain some intuition about the kinds of errors that
+our model is unable to handle. We will be using the model LSTM + 458Manual +
+L2=0.1 + Learnt Glove Emb since it performed the best in our results.
 
 
 % TODO : Bad Examples
@@ -677,10 +739,12 @@ generally robust to noise that can result from mislabelling.
 % TODO
 
 \section{Contributions}
-% TODO
-
+We devised and implemented a novel way of thinking about transforming spoken
+code to actual code by modelling the problem as a sequence labelling task.
 
 \section{Future Work}
+\subsection{Dropout}
+Neural network researchers have routinely employed dropout to learning
 
 \subsection{Universal Code Speech}
 Our current work is done by transcribing spoken code from programmers that have
@@ -730,6 +794,39 @@ code as part of the inputs to their system to achieve better results.
 \printbibliography[title={Whole bibliography}]
 
 \appendix
+\chapter{Tags}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{ |p{3cm}|p{10cm}|  }
+   \hline
+   \textbf{Semantic type} & \textbf{Tags} \\
+   \hline
+   Verb & verb \\
+   \hline
+   \multirow{3}{3cm}{Variable declaration} & variable-type, variable-name, variable-linker, \\
+                                           & variable-array, variable-array-size, variable-ass,\\
+                                           & variable-value \\
+
+   \hline
+   Conditional & if, elseif, else, cond, cond-connect \\
+
+   \hline
+   \multirow{2}{3cm}{For loops} & for, variable-type, variable-name, for-iterations \\
+                                & cond \\
+
+   \hline
+   \multirow{2}{3cm}{While loops} & while, variable-name, cond, variable-mod \\
+                                  & cond-connect \\
+   \hline
+   Function Declaration & function-name \\
+   \hline
+  \end{tabular}
+  \caption{Table of tags}
+  \label{table:1}
+\end{table}
+
 \chapter{Code}
+
 
 \end{document}
