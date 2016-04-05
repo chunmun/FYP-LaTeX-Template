@@ -3,6 +3,8 @@
 \usepackage{parskip}
 \usepackage{amsmath}
 \usepackage{MnSymbol}
+\usepackage{graphicx}
+\usepackage{wrapfig}
 
 \usepackage[usenames,dvipsnames,svgnames,table]{xcolor}
 \usepackage[english]{babel}
@@ -172,11 +174,22 @@ neural network by feeding in each word in a sentence sequentially into the LSTM
 and reading a tag at each time step. The process can be roughly abstracted as
 shown in the figure:
 
-% TODO : Figure
+\begin{figure}[h]
+\includegraphics[width=\textwidth]{Workflow.png}
+\caption{Workflow for tagging a single sentence.
+$c_0$ and $h_0$ represents the initial internal states of the LSTM.}
+\centering
+\end{figure}
+
+The internal states of the LSTM persists between the input each word
+embedding vector in the sentence. Note that here, we apply each word
+to the LSTM sequentially rather than in one long sentence vector as
+how most convolutional sequence-to-sequence models generally work. The
+internal states only persist between inputs within a sentence. They are
+reset when we need to parse the next sentence.
 
 \subsection{Corpus}
-% TODO : How many sentences
-We have gathered a small corpus of labelled sentences that is used for
+We have gathered a small corpus of 500 labelled sentences that is used for
 supervised training. Students, who are programmers, are given 4 different tasks
 in which they must express their code by speaking directly to an experimenter.
 The experimenter will listen to what the student said, and proceed to type on
@@ -184,7 +197,6 @@ the computer what is interpreted from his speech. The speech is generally a mixt
 of movement commands as well as code definitions, such as variable declaration.
 Throughout the entire experiment, the student is not able to directly type or
 gesture to the experimenter his intent other than through his or her own voice.
-% TODO : Reference Yixiu's part?
 
 After each person has completed their task, their speech is then transcribed
 and tagged manually. The sentences boundaries are inserted whenever the student's
@@ -209,17 +221,18 @@ In the first sentence and in the last sentence, \texttt{number} is tagged
 with the dummy tag. However, in the second case, the correct tag is
 \texttt{variable-name}.
 
-Even humans will have a difficult time tagging this, once the sentence are
-taken out of context. We can easily compound the problem if all the 3 sentences
+If the sentence are taken out of context, even humans will have a difficult
+time tagging this.  We can easily compound the problem if all the 3 sentences
 are combined into a single sentence. A student might indicate his wish to move
 to the 7th line, followed by a \texttt{if} conditional and a \texttt{printf}.
 
-It will be difficult for most sequence-to-sequence predictors to figure out
-what the correct tags are without considering the surrounding word context and
-sentence structure. Especially so when the same word is tagged differently. The
-system must be robust to arbitrary combinations of the statements. However, the
-size of the labelled corpus severely restricts the number of examples that the
-model has seen and causes over-fitting to happen when the examples are sparse.
+It will be difficult for sequence-to-sequence predictors to figure out what the
+correct tags are without considering the surrounding word context and sentence
+structure. Especially so when the same word is tagged differently. The system
+must be robust to arbitrary combinations of the statements. However, the size
+of the labelled corpus severely restricts the number of examples that the model
+has been trained on and causes over-fitting to happen when the examples are
+sparse.
 
 \subsubsection{Vocabulary Sparsity} For example, given the complexity of the
 model parameters and small number of variable names seen, the model might
@@ -233,6 +246,7 @@ shall discuss this problem in further depth during the presentation of the
 results.
 
 % TODO : Talk about how the generated corpus is useless
+
 \subsubsection{Generated Corpus}
 In the initial parts of the project, we set up to mitigate some of the issues
 of corpus sparsity by generating an artificial corpus that contains an arbitrary
@@ -250,10 +264,20 @@ vocabulary very much at all. Moreover, we see that the sentences in human spoken
 code is punctuated with many dummy tags, but the generated corpus lacks such
 features.
 
+With just 15 sentence prototypes, the combinatoric explosion in the possible
+combinations exceed over 30k sentences - Overwhelming the manually annotated
+sentence count 65 to 1. The generated sentences are attached to the training
+set together with the manually annotated sentences.
+
 % TODO : Talk how about a modified version of dropout is used vs normal dropout
 % TODO : Dropout by replacing with rare tag randomly
 % TODO : Check ability to generalize
-\subsubsection{Dropout}
+\subsubsection{Dropout} The concept of dropout is employed at the word
+embedding level and the output layer. After the words are transformed into
+their word vector embeddings, half of the vector is randomly zero-ed based on a
+50\% probability. This closely follows the dropout scheme that was formulated
+by \cite{2014Zaremba} so that the training of the RNN is not affected by
+dropouts in between the gates.
 
 \subsection{Word Embeddings}
 First the words of the sentence are converted to word vectors via a word
@@ -267,30 +291,54 @@ together" in the word embedding space.
 
 Here we also experimented with using pre-trained word embeddings from Wikipedia
 that is trained using Glove \cite{pennington2014glove}.
-% TODO : Differences in word embeddings
-% TODO : Lemmatization
 
 After converting the words in the sentence into word vectors, we then feed the
 word vectors one at each time step into the LSTM.
 
-% TODO : Fix ugly text
-\begin{align*}
-  &\text{for} &\text{loop } &\text{that } &\text{runs } &\text{10 } &\text{times } \\
-  &\downarrow &\downarrow &\downarrow &\downarrow &\downarrow &\downarrow \\
-  &[1.27, -0.2, 3, ...] &[0.4,...] &[-0.01, ...] &[-2, ...] &[4.2, ...] &[0.75, ...]
-\end{align*}
+\begin{figure}[h]
+\includegraphics[width=\textwidth]{embedding.png}
+\caption{The word vectors are randomly generated for each word initially}
+\centering
+\end{figure}
+
+% TODO : Lemmatization
+There are approximately 500 words present in the words that were annotated within
+our experiments. The dimensionality is small enough that lemmatization did
+not significantly alter the performance of our solution. On the other hand, the
+pre-trained Glove embeddings, comes with a much larger vocabulary size of
+around 30k words.
+
+Using pre-trained word vectors helped to improve the convergence of the model
+training. However, the key here is that we need to continuously update the
+word embedding vectors. As observed in the final results, a fixed word embedding
+that is pre-trained on an out-of-domain corpus produces worse convergence rates
+for model training, performing worse than random initialization.
+
+This negates some of the benefits of using a larger pre-trained corpus with the
+hopes that rare words can be infered more accurately against the seen vocabulary
+when the words are close in the word embedding space. Since we update and
+modify the word embeddings of the words in our training set, the simiarity
+constraint is no longer preserved.
 
 
 \subsection{LSTM}
 Long-short term memory (LSTM) refers to a specific architecture of Recursive
 neural networks that is arranged as follows:
 
-% TODO : LSTM Figure
 
 $\sigma$ is the sigmoid function $f(x) = \frac{1}{(1 + e^x)}$, $\odot$ is the
-matrix element-wise multiplication.
+matrix element-wise multiplication. We can then represent all the updates
+made on the hidden state $c_t$ at time step $t$ given the input $x_t$.
+{
+\begin{wrapfigure}{l}{0.8\textwidth}
+    \centering
+    \includegraphics[width=0.8\textwidth]{LSTM.png}
+    \caption{Diagram of internal operations in an LSTM cell at time step $t$}
+\end{wrapfigure}
 
+% TODO : LSTM Figure
 \begin{align*}
+  \\
   s_t &= \lbrack h_{t-1}, x_{t} \rbrack \\
   f_t &= \sigma \left( W_f s_t + b_f \right) \\
   i_t &= \sigma \left( W_i s_t + b_i \right) \\
@@ -298,21 +346,21 @@ matrix element-wise multiplication.
   o_t &= \sigma \left( W_o s_t + b_o \right) \\
   c_t &= c_{t-1} \odot f_t + i_t \odot c_t' \\
   h_t &= o_t \odot tanh \left( c_t \right) \\
-  y_t &= softmax \left( h_t W_s + b_s \right)
+  y_t &= softmax \left( h_t W_s + b_s \right) \\
 \end{align*}
+}
 
 At each word, the internal hidden states $c_t$ is updated as it advances from
-one word to the next by removing irrelevant information
-
+one word to the next by removing irrelevant information and incorporating
+new information.
 
 We added another layer of linear operation on the output state $h_t$ to get
 $y_t$ before we are able to evaluate the softmax. This effectively frees the
 LSTM to have the size of the hidden vector $c_t$ to be the same as the output
 $y_t$. Adding another sigmoid operator on $y_t$ seems to have yielded extremely
-bad training results that does not converge. This could be a case of bad
-initialization of the output layer, but we did not have sufficient time to
-fully test our hypothesis.
-% TODO : Check output layer
+bad training results that does not converge fast enough. This could be a case
+of bad initialization of the output layer, but we did not have sufficient time
+to fully test our hypothesis.
 
 The appeal of using a Recursive neural network like the LSTM over more
 conventional methods like convolutional networks or fully connected neural
@@ -341,13 +389,14 @@ After defining the problem in terms of a sequence prediction, we now state the
 loss function that is used as a measure of how likely the correct sequence of
 tags are predicted given the input.
 
-\subsubsection{Loss Function} We measure the how well the model does by the negative log likelihood
-of the labelled tagged sequence when given the conditional probability of all
-tags for each word. This is the same loss function that will be optimized during
-the learning of the model parameters $\theta$. The parameters refer to the
-weight and bias matrices that are used the LSTM. Given a word $w \in W$ from
-the list of words in our vocabulary, we obtain a probability of $P(T=t | w,
-\theta)$ for every given tag that exists in our system.
+\subsubsection{Loss Function} We measure the how well the model does by the
+negative log likelihood of the labelled tagged sequence when given the
+conditional probability of all tags for each word. This is the same loss
+function that will be optimized during the learning of the model parameters
+$\theta$. The parameters refer to the weight and bias matrices that are used
+the LSTM. Given a word $w \in W$ from the list of words in our vocabulary, we
+obtain a probability of $P(T=t | w, \theta)$ for every given tag that exists in
+our system.
 \begin{equation}
   \ell(\theta) = -\sum_{w \in W} \sum_{t \in T} log(P(t | w, \theta)) I(t = \hat{t})
 \end{equation}
@@ -369,7 +418,7 @@ and then producing a Sentence level log likelihood loss function. The best
 sentence is optimal decoding over all possible paths that the tag sequence that
 take using the Viterbi algorithm.
 
-A more modern approach that is taken by the Xuezhe \cite{2016arXiv160301354M}
+A more recent approach that is taken by the Xuezhe \cite{2016arXiv160301354M}
 is to add a Conditional Random Field layer on top of the output of their
 Bi-directional LSTM layer. This allows the final output to take into
 consideration tag transitions given the hidden states that is
@@ -399,6 +448,8 @@ using SGD without momentum. The resulting modified gradient descent is the one
 that we will be using in the experiments. However, this method introduced another
 hyperparameter $\rho$ that needs to be tuned for the convergence to work well.
 
+We discovered that a $\rho$ and $lr$ value of 10 and 1 works best after some
+random searching.
 \begin{align*}
   h &\leftarrow h + \left( \frac{\partial \ell(\theta)}{\partial \theta} \right)^2 \\
   \theta &\leftarrow \theta - lr * \frac{\partial \ell(\theta)}{\partial \theta}
@@ -419,25 +470,22 @@ clipped to the range of -5 to 5.
 
 \subsubsection{L2 Regularization} We experimented with adding a L2
 regularization term to the loss function but
-% TODO put out results for using L2 reg
 
-% TODO initialization divide by largest eigenvalue
 
 \subsection{Parameter Initialization}
 
 \subsubsection{Large Forget Gate Bias} We initialized the forget gate bias
-$b_f$ of +2 instead of the zero vector after considering the results from
+$b_f$ to +2 instead of the zero vector after considering the results from
 Jozefowicz, et al\cite{ICML2015JozefowiczZS}. They have showed empirically that
 LSTMs become more capable at dealing with long range dependencies and outperform
 for sophisticated variants like the Gated Recursive Unit (GRU) on several
 tasks.
 
-% TODO : Show better results of long range deps
-
-
 
 \chapter{Evaluation}
-% TODO
+The main evaluation criteria that we will use here is the Precision and Recall
+of labelled sequence against the correct labels.
+% TODO : State how many sentences are used to test
 
 
 \section{Experimental Setup}
@@ -446,11 +494,19 @@ tasks.
 \section{Results}
 % TODO Check L2 regularization differences
 % TODO Difference with using word vectors
+% TODO Talk about how the generated corpus is useless
+% TODO Show better results of long range deps with large forget gate bias
 
-The model is extremely sensitive the words that are found within the corpus but generally
-robust to noise that can result from mislabelling.
+The model is extremely sensitive the words that are found within the corpus but
+generally robust to noise that can result from mislabelling.
 
 
+% TODO : Bad EX
+% Er sorry can you create an integer before this for loop for size equals to array dot size
+
+% TODO : People like to name their array as array
+% TODO : People like to say their change / say an example of the change / or both
+% TODO : Omission of equals for array, index assignment pattern
 
 \chapter{Conclusion}
 % TODO
@@ -458,14 +514,14 @@ robust to noise that can result from mislabelling.
 \section{Contributions}
 % TODO
 
+
 \section{Future Work}
 
-
 \subsection{Universal Code Speech}
-Current work is done by transcribing spoken code from programmers that have a
-good knowledge of the syntactical structures that are present in C. That causes
-the transcribed speech have extremely clear structures that are reflective of
-the syntax present in C code.
+Our current work is done by transcribing spoken code from programmers that have
+a good knowledge of the syntactical structures that are present in C. That
+causes the transcribed speech have extremely clear structures that are
+reflective of the syntax present in C code.
 
 However, this creates problems in parsing when say we switch to a new
 programming language like Python - The loop structure is distinctly different
@@ -492,6 +548,9 @@ that the array and its index is being used, rather than tag them independently
 as \texttt{variable-name} and \texttt{variable-value}, we can tag the value as
 the \texttt{variable-array-index}.
 
+
+\subsection{Pre-trained Word Embeddings}
+The continuous updating of the
 
 \printbibliography[title={Whole bibliography}]
 
