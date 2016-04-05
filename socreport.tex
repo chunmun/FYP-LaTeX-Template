@@ -121,16 +121,39 @@ between them that this cannot be directly approached without considering
 the robustness of the method of translation in the presence of missing
 information or word paraphrasing in non-programming keywords.
 
-This motivates us to model the problem in terms of \textbf{Semantic Role
-Labelling} where semantically relevant keywords of the given sentence are
-identified before further processing can infer missing information.
-
 \section{The Problem}
+
+This motivates us to model the problem in terms of \textbf{Semantic Role
+Labelling} (SRL) where semantically relevant keywords of the given sentence are
+identified before further processing can infer missing information. Note
+that there are key differences between the simplified approach taken here
+that disregards dependencies between the semantic tags and the more
+traditional definition of the SRL task. There can be multiple verbs in traditional
+SRL involved in a single sentence that can confer semantic meaning to it.
+However, in our problem, we observed that each sentence most likely has only one
+single "verb" in it that can provide semantic meaning. This observation is
+allows us to relax the need to have multiple verbs and their associated
+arguments in a single sentence.
 
 The problem we tackle here involves the part of the pipeline where accurately
 transcribed text is labelled with semantic tags such as \texttt{variable-name},
 or \texttt{if}. The model which is adopted is a sequence prediction given
 the sentence. The predicted sequence represents the sequence of semantic tags.
+
+\subsubsection{Tags} The semantic tags that we will be using are based-off
+the 4 different coding tasks that were identified as important to our problem
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item Variable declaration
+  \item Function declaration
+  \item For and while loops
+  \item If else conditional branches
+\end{enumerate}
+
+The full list of tags used is listed in the Appendix. The following is 3 examples
+of sentences and their tagged sequence.
 
 \begin{enumerate}
 \itemsep0em
@@ -148,19 +171,18 @@ sequence that is of the same length, like the below for the last line.
 \hspace{20pt}
 \tagfor{for} \tago{loop} \tago{that} \tago{runs} \tagfi{10} \tago{times}
 
-The approach we are taking fits into a sequence-to-sequence modelling task
-naturally. We will use a neural network approach to solve this task.
-Specifically, we use a Recursive neural network that reads the sentences in one
-word at a time and generates the tags after every word. Now the sentence
-length and the tag sequence length are the same by artificially adding in the
-dummy tag.
+The approach we are taking fits into a sequence labelling task naturally. We
+will use a neural network approach to solve this task.  Specifically, we use a
+Recursive neural network that reads the sentences in one word at a time and
+generates the tags after every word. Now the sentence length and the tag
+sequence length are the same by artificially adding in the dummy tag.
 
 
 \section{Our Solution}
 Recurrent neural networks has produced many impressive results on speech and
 natural language processing as well computer vision task. These tasks are
 characterized by an extremely large dimension space of the model. In our
-specific task of sequence-to-sequence prediction, if we have $w$ words, and
+specific task of sequence labelling, if we have $w$ words, and
 $t$ different tag, then a sentence of length $n$ will have an input space
 of $w^n$ and an output space of $t^n$. A large percentage of the input sentences
 will be invalid because they do not make any sense in English as well as
@@ -168,11 +190,17 @@ invalid tag sequences in the output. However, this does not make this
 task any less daunting given that there can be a complex combinations of words
 that code can be expressed in speech.
 
+The version of the RNN we will be using is the Long Short Term Memory (LSTM)
+which performs better than most RNNs due to the fact that it overcomes
+the vanishing/exploding gradient issue faced when training RNNs in practice.
+LSTMs also seem to be able to capture long range dependencies better than
+RNN which suits our problem.
+
 Our approach is basically a supervised learning machine learning task. After
-creating a corpus of correctly labelled sentences, we train the recurrent
-neural network by feeding in each word in a sentence sequentially into the LSTM
-and reading a tag at each time step. The process can be roughly abstracted as
-shown in the figure:
+creating a corpus of correctly labelled sentences, we train the LSTM
+by feeding in each word in a sentence sequentially into it and it outputs a tag
+at each time step. The process can be roughly abstracted as shown in the
+figure.
 
 \begin{figure}[h]
 \includegraphics[width=\textwidth]{Workflow.png}
@@ -184,9 +212,16 @@ $c_0$ and $h_0$ represents the initial internal states of the LSTM.}
 The internal states of the LSTM persists between the input each word
 embedding vector in the sentence. Note that here, we apply each word
 to the LSTM sequentially rather than in one long sentence vector as
-how most convolutional sequence-to-sequence models generally work. The
+how most convolutional sequence labelling models generally work. The
 internal states only persist between inputs within a sentence. They are
-reset when we need to parse the next sentence.
+reset when we need to parse the next sentence. There are also variants
+of LSTMs where the encoding of the input and decoding of the output
+sequence is done separately. The version which we will use the experiments
+outputs the output sequence at the same time step as the input word.
+
+This imposes some constraints on the ability of our model to generalize beyond
+the case where some labels depend on the existence of certain keywords
+that may be further down the sentence, yet to be input.
 
 \subsection{Corpus}
 We have gathered a small corpus of 500 labelled sentences that is used for
@@ -226,7 +261,7 @@ time tagging this.  We can easily compound the problem if all the 3 sentences
 are combined into a single sentence. A student might indicate his wish to move
 to the 7th line, followed by a \texttt{if} conditional and a \texttt{printf}.
 
-It will be difficult for sequence-to-sequence predictors to figure out what the
+It will be difficult for sequence labelling models to figure out what the
 correct tags are without considering the surrounding word context and sentence
 structure. Especially so when the same word is tagged differently. The system
 must be robust to arbitrary combinations of the statements. However, the size
@@ -315,10 +350,11 @@ constraint is no longer preserved.
 Long-short term memory (LSTM) refers to a specific architecture of Recursive
 neural networks that is arranged as follows:
 
-
 $\sigma$ is the sigmoid function $f(x) = \frac{1}{(1 + e^x)}$, $\odot$ is the
 matrix element-wise multiplication. We can then represent all the updates
 made on the hidden state $c_t$ at time step $t$ given the input $x_t$.
+
+\clearpage
 {
 \begin{wrapfigure}{l}{0.8\textwidth}
     \centering
@@ -360,10 +396,97 @@ retaining the capability of learning long range dependencies.
 
 \chapter{Related Work}
 \section{SENNA}
-The de facto Semantic Role labelling framework that provided a similar
-neural network approach to the \cite{DBLP2011Collobert}
+Senna is unified neural network framework that was developed by Collobert
+\cite{DBLP2011Collobert} that has been successfully applied to a variety of NLP
+tasks such as Named Entity Recognition (NER), Chunking, Parts-of-Speech (POS)
+tagging and Semantic Role Labelling (SRL). Instead of exploiting very special
+man-made feature engineering to achieve good results over the large variety of
+tasks, the SENNA system learns an internal representation over a large amount
+of unlabelled data.
+
+The idea of using word embeddings that can be trained is not a new one, but Collobert
+has sucessfully shown that training the word embeddings is crucial to the
+performance of SENNA. The words are transformed into word vectors via a lookup
+table in a similar approach that we discussed in Chapter 1. However, SENNA also
+allows additional features to be added to words by extending the word vectors
+with the relevant feature vector lookup tables.
+
+For example, if additional POS information is provided, then each POS tag can
+be encoded into a feature vector of length $l_pos$. The original word is
+a word vector of length $l_word$. Then the combined word feature vector would be
+of length $l_word + l_pos$. This scheme allows the word vectors to be augmented
+with additional information as well as the feature vectors trained together
+with the word vectors.
+
+In all the NLP tasks except the SRL task, the sentence is then broken up into
+window frames that group a single word feature vector together with its surrounding
+words as a single window. For example, in the sentence
+
+\hspace{20pt}
+for loop that runs 10 times
+
+we can group the words into window frames of size 3
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+\item *left* for loop
+\item for loop that
+\item loop that runs
+\item that runs 10
+\item runs 10 times
+\item 10 times *right*
+\end{enumerate}
+
+Additional left and right padding words are used at that the borders of
+the sentences.
+
+\subsubsection{Long Range Dependencies} While this worked well for non-SRL
+tasks, the paper described that SRL faces a problem of long range dependencies.
+When the arguments of the verb occurs very far away from the verb, it is
+impossible for the framework to correctly tag the arguments for faraway verbs.
+Hence for the SRL task, the word vectors are passed into a convoluntional
+layers which processes them into a global sentence vector. The convoluntions
+can be seen as a generalization of the windowing method. Extra features has to
+be added to the word feature vectors that describe the relative positions of
+the words to the verbs in the sentence.
+
+This technique is reminiscent of the word reordering models used in the IBM
+models for statistical machine translation. In this case, the convoluntional
+layers learn where the different words are likely to be clustered around.
+The paper also shows that the trained model captures words that close to
+the verb rather than a further one that could be related to a seperate verb.
 
 \section{Bi-directional LSTM-CNNs-CRF}
+
+This paper by Xuezhe \cite{2016arXiv160301354M} demostrated a fully end-to-end
+system where there are no feature engineering or data preprocessing involved.
+The system produced State-of-the-Art performance on NER and POS tagging. Even
+though it did not directly apply their model to SRL, we consider their approach
+so similar to sequence labelling tasks, we could draw some ideas for the same
+task described in our problem.
+
+Briefly, the architecture employed in the paper is a Convolutional neural network
+for character-level representations, coupled with deep layers of bi-directional
+LSTMs to learn the sequence labels and finally a Conditional Random Field layer
+at the end to convert the outer layer of the last LSTM into an output sequence.
+
+Character-level representations has shown to be useful in extracting morphological
+information about the words like the prefix or the suffix of the word.
+
+The LSTM construction is basically the same as the one we will employ to tackle
+our problem. However, the paper described a crucial difference where the
+layers of LSTMs are stacked on top of each other but each alternate layer
+reads in the outputs of the previous layer in the reverse order. This helps to
+overcome the problem that our model faces where the labels may depend on a
+future word.
+
+Lastly, the CRF layer can be taught as a search over all possible labels at
+the sentence level instead of relying on just one word.
+
+We admit that some techniques here are superior to the one that we will employ
+but the models here have many more parameters and are generally difficult to
+train without sufficient data.
 
 
 \section{Statistical Machine Translation}
@@ -471,28 +594,79 @@ LSTMs become more capable at dealing with long range dependencies and outperform
 for sophisticated variants like the Gated Recursive Unit (GRU) on several
 tasks.
 
+\subsubsection{Weight initializations} The matrix values are initialized to
+random uniform values of \\$(\sqrt{\frac{-6}{fan_{in} + fan_{out}}},
+\sqrt{\frac{6}{fan_{in} + fan_{out}}})$, where $fan_{in}$ and $fan_{out}$ refers
+to the size of the matrix along the rows and columns.
+
 
 \chapter{Evaluation}
-The main evaluation criteria that we will use here is the Precision and Recall
-of labelled sequence against the correct labels.
+The main evaluation criteria that we will use here is the Word Error Rate (WER)
+of labelled sequence against the correct labels. The values reported here
+will be the mean WER across all sentences. This value includes the mislabelling
+of dummy tags as well as the semantic ones within the output sequence.
+
 % TODO : State how many sentences are used to test
+To test the practical uses of a corpus that is trained entirely with the speakers
+using the C programming language, we added a validation dataset where the speakers
+used Java. Both datasets comes from speech experiments where the students are
+made to write code for the same task. Hence, we see that the model shows some
+generalization ability beyond the syntax of the same language.
+
 
 
 \section{Experimental Setup}
-% TODO
+\subsubsection{Datasets}
+We will use 2 different datasets for training and another 2 for validation in
+our experiments. The training datasets comprises of 458-sentences drawn from
+speech experiments where the speakers used C as well as a generated corpus
+containing 30K sentences that were generated from sentence prototypes which is
+also modelled after C code.
+
+The validation datasets comprises of a 149-sentence dataset which the speaker
+used the C programming language, and another 162-sentence dataset where the speaker
+used Java.
+
 
 \section{Results}
+\begin{table}[h!]
+\centering
+  \begin{tabular}{ |p{3cm}||p{3cm}|p{3cm}|p{3cm}|  }
+   \hline
+   \multicolumn{4}{|c|}{Country List} \\
+   \hline
+   Country Name     or Area Name& ISO ALPHA 2 Code &ISO ALPHA 3 Code&ISO numeric Code\\
+   \hline
+   Afghanistan   & AF    &AFG&   004\\
+   Aland Islands&   AX  & ALA   &248\\
+   Albania &AL & ALB&  008\\
+   Algeria    &DZ & DZA&  012\\
+   American Samoa&   AS  & ASM&016\\
+   Andorra& AD  & AND   &020\\
+   Angola& AO  & AGO&024\\
+   \hline
+  \end{tabular}
+  \caption{Table to test captions and labels}
+  \label{table:1}
+\end{table}
 
-% TODO Check L2 regularization differences
+
+\subsection{Word Embeddings}
 % TODO Difference with using word vectors
+
+\subsection{Generated Corpus}
 % TODO Talk about how the generated corpus is useless
+
+\subsection{L2 Regularization}
+% TODO Check L2 regularization differences
+
 % TODO Show better results of long range deps with large forget gate bias
 
 The model is extremely sensitive the words that are found within the corpus but
 generally robust to noise that can result from mislabelling.
 
 
-% TODO : Bad EX
+% TODO : Bad Examples
 % Er sorry can you create an integer before this for loop for size equals to array dot size
 
 % TODO : People like to name their array as array
@@ -540,8 +714,18 @@ as \texttt{variable-name} and \texttt{variable-value}, we can tag the value as
 the \texttt{variable-array-index}.
 
 
-\subsection{Pre-trained Word Embeddings}
-The continuous updating of the
+\subsection{Online Code Context Switching}
+There are very obvious contextual clues that are missing from knowing exactly
+where the new code is to be inserted. For example, we can gleam what variable
+names may be present within a certain function scope and we should update our
+context to the same one whenever the speaker works within the same location in
+the code.
+
+Hence the ideal system would need to model the position of the insertion
+code as part of the inputs to their system to achieve better results.
+
+
+
 
 \printbibliography[title={Whole bibliography}]
 
