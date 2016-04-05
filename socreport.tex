@@ -269,16 +269,6 @@ combinations exceed over 30k sentences - Overwhelming the manually annotated
 sentence count 65 to 1. The generated sentences are attached to the training
 set together with the manually annotated sentences.
 
-% TODO : Talk how about a modified version of dropout is used vs normal dropout
-% TODO : Dropout by replacing with rare tag randomly
-% TODO : Check ability to generalize
-\subsubsection{Dropout} The concept of dropout is employed at the word
-embedding level and the output layer. After the words are transformed into
-their word vector embeddings, half of the vector is randomly zero-ed based on a
-50\% probability. This closely follows the dropout scheme that was formulated
-by \cite{2014Zaremba} so that the training of the RNN is not affected by
-dropouts in between the gates.
-
 \subsection{Word Embeddings}
 First the words of the sentence are converted to word vectors via a word
 embedding. The word embedding used in all our experiments is a float vector of
@@ -434,10 +424,10 @@ done by employing gradient descent over the parameters in the LSTM (including
 the word embedding vector).
 
 Taking the gradients of the contribution of each weight and bias matrix is
-easily done in Theano by using the Tensor gradient function. We make of this
-functionality as well when defining the version of the loss function with the
-L2 regularization term. The only hyperparameter that needed to be determined
-here is the learning rate $lr$.
+easily done in Theano by using the Tensor gradient function. We use make of this
+functionality when defining the version of the loss function with the L2
+regularization term as well. The only hyperparameter that needed to be
+determined here is the learning rate $lr$.
 \begin{equation}
   \theta \leftarrow \theta - lr * \frac{Loss}{\delta \theta}
 \end{equation}
@@ -463,7 +453,7 @@ each technique.  Exploration of the different gradient descent techniques
 are out of scope for this project but we feel the significantly faster rate of
 convergence due to AdaDelta deserved a special mention.
 
-\subsubsection{Gradient Clipping} In order to prevent fluctuations of the parameters
+\subsubsection{Gradient Clipping} In order to prevent fluctuations of the parameter
 values, we employ a method called clipping on the gradient matrices $h$ and
 $\frac{\partial \ell(\theta)}{\partial \theta}$. In this case, the values are
 clipped to the range of -5 to 5.
@@ -492,6 +482,7 @@ of labelled sequence against the correct labels.
 % TODO
 
 \section{Results}
+
 % TODO Check L2 regularization differences
 % TODO Difference with using word vectors
 % TODO Talk about how the generated corpus is useless
